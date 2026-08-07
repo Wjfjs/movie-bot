@@ -27,6 +27,7 @@ public class MovieController {
         return ollamaService.generate(send);
     }
 
+    // http://localhost:8080/api/movie/search?query=인터스텔라
     @GetMapping("/api/movie/search")
     public List<MovieDto> searchMovie(@RequestParam String query) {
         return tmdbService.searchMovie(query);
