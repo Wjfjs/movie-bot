@@ -10,20 +10,19 @@ import net.dv8tion.jda.api.JDABuilder;
 import org.springframework.beans.factory.annotation.Value;
 
 import com.moviebot.movie_bot.service.OllamaService;
+import com.moviebot.movie_bot.service.RagService;
 import com.moviebot.movie_bot.service.MovieService;
 
 @Component
 public class DiscordBot extends ListenerAdapter {
-    private final OllamaService ollamaService;
-    private final MovieService movieService;
+    private final OllamaService ollamaService;  // 테스트용
+    private final MovieService movieService;    // 테스트용
+    private final RagService ragService;
 
-    public DiscordBot(
-        @Value("${discord.bot.token}") String token,
-        OllamaService ollamaService,
-        MovieService movieService
-    ) throws Exception {
+    public DiscordBot(@Value("${discord.bot.token}") String token, OllamaService ollamaService, MovieService movieService, RagService ragService) throws Exception {
         this.ollamaService = ollamaService;
         this.movieService = movieService;
+        this.ragService = ragService;
 
         JDABuilder.createDefault(token)
                 .addEventListeners(this)
@@ -55,10 +54,11 @@ public class DiscordBot extends ListenerAdapter {
             }
 
             // TMDB에서 영화 정보 가져오기
-            String movieContext = movieService.createMovieContext(question);
+            //String movieContext = movieService.createMovieContext(question);    // 테스트용
 
             // ollama에 질문 시작 -> TMDB에서 가져온 영화 정보 context 전달
-            String answer = ollamaService.generateMovieAnswer(question, movieContext);
+            //String answer = ollamaService.generateMovieAnswer(question, movieContext);    // 테스트용
+            String answer = ragService.generateAnswer(question);
 
             // discord에 답변 전송
             event.getChannel().sendMessage(answer).queue();
