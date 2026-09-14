@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.moviebot.movie_bot.rag.MovieDocument;
 import com.moviebot.movie_bot.rag.SearchResult;
 
+// 저장된 영화 검색
 @Service
 public class VectorStoreService {
     private final List<MovieDocument> documents = new ArrayList<>();
@@ -23,7 +24,7 @@ public class VectorStoreService {
         documents.add(document);
 
         System.out.println(
-                "Vector Store에 영화 추가: " + document.getTitle());
+                "[Vector Store]Vector Store에 영화 추가: " + document.getTitle());
     }
 
     // 모두 반환

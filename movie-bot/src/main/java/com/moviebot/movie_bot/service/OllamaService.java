@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 
+// llama3.2로 최종 답변 생성
 @Service
 public class OllamaService {    
     private final WebClient webClient;

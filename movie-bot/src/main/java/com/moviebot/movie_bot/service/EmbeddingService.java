@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 // nomic-embed-text 사용
+// 질문을 벡터로 변환
 @Service
 public class EmbeddingService {
     private final WebClient webClient;
