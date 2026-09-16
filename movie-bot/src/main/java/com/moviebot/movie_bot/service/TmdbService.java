@@ -27,7 +27,6 @@ public class TmdbService {
     }
 
     public List<MovieDto> searchMovie(String query) {
-
         try {
             String response = webClient.get()
                     .uri(uriBuilder -> uriBuilder
