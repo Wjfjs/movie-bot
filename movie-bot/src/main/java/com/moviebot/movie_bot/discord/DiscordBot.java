@@ -39,6 +39,9 @@ public class DiscordBot extends ListenerAdapter {
 
         String content = event.getMessage().getContentRaw();
 
+        // 봇 멘션 제거
+        content = content.replaceAll("<@!?\\d+>", "").trim();
+
         System.out.println("Discord 메시지 : " + content);
         
         if (content.equals("!안녕")) {
