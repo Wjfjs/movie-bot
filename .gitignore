@@ -1,3 +1,4 @@
 movie-bot/target/classes/application-local.properties
 movie-bot/src/main/resources/application-local.properties
 movie-bot/target/
+/movie-bot/.vscode
