@@ -118,26 +118,6 @@ public class RagService {
         return context.toString();
     }
 
-    // TMDB 영화 정보를 Ollama Context로 변환
-    private String createContextFromMovie(MovieDto movie) {
-        if (movie == null) {
-            return "";
-        }
-
-        return """
-                영화 제목: %s
-                개봉일: %s
-                평점: %.1f
-                줄거리:
-                %s
-                """.formatted(
-                movie.getTitle(),
-                movie.getReleaseDate(),
-                movie.getRating(),
-                movie.getOverview()
-        );
-    }
-
     // 최종 영화 답변 생성
     //
     // 1. VectorStore 제목 검색
@@ -223,7 +203,7 @@ public class RagService {
         //         selectedMovie.getRating(),
         //         selectedMovie.getOverview()
         // );
-        String movieContext = createContextFromMovie(selectedMovie);
+        String movieContext = movieService.createMovieContent(selectedMovie);
 
         System.out.println(
                 "[RAG] 최종 영화 Context 생성 완료"
