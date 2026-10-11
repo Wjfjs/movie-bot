@@ -2,3 +2,4 @@ movie-bot/target/classes/application-local.properties
 movie-bot/src/main/resources/application-local.properties
 movie-bot/target/
 /movie-bot/.vscode
+movie-bot/src/main/java/com/moviebot/movie_bot/controller/DbTestController.java

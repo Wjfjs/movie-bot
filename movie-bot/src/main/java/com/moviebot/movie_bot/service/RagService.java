@@ -191,18 +191,6 @@ public class RagService {
         System.out.println("[RAG] VectorStore 저장 완료");
 
         // 선택된 영화 정보를 Ollama Context로 변환=================================================================================
-        // String movieContext = """
-        //         영화 제목: %s
-        //         개봉일: %s
-        //         평점: %.1f
-        //         줄거리:
-        //         %s
-        //         """.formatted(
-        //         selectedMovie.getTitle(),
-        //         selectedMovie.getReleaseDate(),
-        //         selectedMovie.getRating(),
-        //         selectedMovie.getOverview()
-        // );
         String movieContext = movieService.createMovieContent(selectedMovie);
 
         System.out.println(

@@ -1,47 +1,132 @@
+
 package com.moviebot.movie_bot.service;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import com.moviebot.movie_bot.rag.MovieDocument;
 import com.moviebot.movie_bot.rag.SearchResult;
 
-// 저장된 영화 검색
+// PostgreSQL 기반 영화 벡터 저장소
 @Service
 public class VectorStoreService {
-    private final List<MovieDocument> documents = new ArrayList<>();
-    private final SimilarityService similarityService;
 
-    public VectorStoreService(SimilarityService similarityService) {
-        this.similarityService = similarityService;
+    private static final String TABLE_NAME = "moviebot.movie_documents";
+    private static final int EMBEDDING_DIMENSION = 768;
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public VectorStoreService(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
     }
 
-    // 벡터에 추가
+    // float[] 임베딩을 PostgreSQL vector 형식으로 변환
+    private String toVectorString(float[] embedding) {
+        if (embedding == null) {
+            throw new IllegalArgumentException("임베딩이 null입니다.");
+        }
+
+        if (embedding.length != EMBEDDING_DIMENSION) {
+            throw new IllegalArgumentException(
+                    "임베딩 차원 오류: 기대값 = "
+                            + EMBEDDING_DIMENSION
+                            + ", 실제값 = "
+                            + embedding.length);
+        }
+
+        return java.util.Arrays.toString(embedding);
+    }
+
+    // PostgreSQL vector 문자열을 float[]로 변환
+    private float[] parseEmbedding(String vectorText) {
+        if (vectorText == null || vectorText.length() < 2) {
+            throw new IllegalArgumentException("잘못된 vector 데이터입니다.");
+        }
+
+        String values = vectorText.substring(1, vectorText.length() - 1);
+
+        if (values.isBlank()) {
+            return new float[0];
+        }
+
+        String[] parts = values.split(",");
+        float[] embedding = new float[parts.length];
+
+        for (int i = 0; i < parts.length; i++) {
+            embedding[i] = Float.parseFloat(parts[i].trim());
+        }
+
+        return embedding;
+    }
+
+    // ResultSet을 MovieDocument로 변환
+    private MovieDocument mapDocument(ResultSet rs, int rowNum)
+            throws SQLException {
+
+        String title = rs.getString("title");
+        String content = rs.getString("content");
+        String vectorText = rs.getString("embedding");
+
+        return new MovieDocument(
+                title,
+                content,
+                parseEmbedding(vectorText));
+    }
+
+    // 영화 데이터 저장
     public void addDocument(MovieDocument document) {
-        documents.add(document);
+        String sql = """
+                INSERT INTO moviebot.movie_documents
+                    (title, content, embedding)
+                VALUES (?, ?, ?::vector)
+                """;
 
-        System.out.println("[Vector Store]Vector Store에 영화 추가: " + document.getTitle());
+        String vector = toVectorString(document.getEmbedding());
+
+        jdbcTemplate.update(
+                sql,
+                document.getTitle(),
+                document.getContent(),
+                vector);
+
+        System.out.println(
+                "[Vector Store] PostgreSQL에 영화 저장: "
+                        + document.getTitle());
     }
 
-    // 모두 반환
+    // 저장된 모든 영화 조회
     public List<MovieDocument> getDocuments() {
-        return documents;
+        String sql = """
+                SELECT title, content, embedding::text AS embedding
+                FROM moviebot.movie_documents
+                ORDER BY id
+                """;
+
+        return jdbcTemplate.query(sql, this::mapDocument);
     }
 
-    // 사이즈 반환
+    // 저장된 영화 개수 조회
     public int size() {
-        return documents.size();
+        String sql = "SELECT COUNT(*) FROM moviebot.movie_documents";
+
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class);
+
+        return count == null ? 0 : count;
     }
 
-    // 삭제
+    // 모든 영화 데이터 삭제
     public void clear() {
-        documents.clear();
+        jdbcTemplate.update("DELETE FROM moviebot.movie_documents");
+
+        System.out.println("[Vector Store] PostgreSQL 영화 데이터 전체 삭제");
     }
 
-    //제목으로 검색
+    // 제목으로 검색(대소문자 및 공백 무시)
     public List<MovieDocument> findByTitle(String title) {
         List<MovieDocument> results = new ArrayList<>();
 
@@ -51,23 +136,24 @@ public class VectorStoreService {
 
         String normalizedTitle = normalizeTitle(title);
 
-        System.out.println("[Vector Store] 제목 검색: " + title);
+        String sql = """
+                SELECT title, content, embedding::text AS embedding
+                FROM moviebot.movie_documents
+                WHERE regexp_replace(
+                    lower(title), '[[:space:]]+', '', 'g'
+                ) = ?
+                ORDER BY id
+                """;
 
-        for (MovieDocument document : documents) {
-            if (document == null || document.getTitle() == null) {
-                continue;
-            }
+        results.addAll(
+                jdbcTemplate.query(sql, this::mapDocument, normalizedTitle));
 
-            String documentTitle = normalizeTitle(document.getTitle());
-
-            // 제목이 정확하게 일치하는 경우
-            if (documentTitle.equals(normalizedTitle)) {
-
-                System.out.println("[Vector Store] 제목 일치: " + document.getTitle());
-
-                results.add(document);
-            }
-        }
+        System.out.println(
+                "[Vector Store] 제목 검색: "
+                        + title
+                        + " / 결과: "
+                        + results.size()
+                        + "개");
 
         return results;
     }
@@ -78,70 +164,73 @@ public class VectorStoreService {
             return "";
         }
 
-        // 소문자로 변환하고 공백 제거
-        return title.trim().toLowerCase().replaceAll("\\s+", "");
+        return title.trim()
+                .toLowerCase()
+                .replaceAll("\\s+", "");
     }
 
-    // 유사도 기준으로 상위 3개 저장
-    // queryEmbedding 사용자의 질문 임베딩
-    // topK 최대 검색 개수
-    // minSimilarity 최소 유사도
+    // 기본 유사도 검색
     public List<SearchResult> search(float[] queryEmbedding, int topk) {
         return search(queryEmbedding, topk, 0.0);
     }
 
-    public List<SearchResult> search(float[] queryEmbedding, int topk, double minSimilarity) {
-        List<SearchResult> results = new ArrayList<>();
+    // PostgreSQL pgvector를 이용한 유사도 검색
+    public List<SearchResult> search(
+            float[] queryEmbedding,
+            int topk,
+            double minSimilarity) {
 
-        System.out.println(
-                "[Vector Store] 저장된 문서 수: "
-                        + documents.size()
-        );
-
-        // 저장된 모든 영화와 질문 비교
-        for (MovieDocument document : documents) {
-            double similarity = similarityService.cosineSimilarity(queryEmbedding, document.getEmbedding());
-
-            System.out.println("[Vector Store] " + document.getTitle() + " similarity = " + similarity);
-
-            // 최소 유사도보다 낮으면 제외
-            if (similarity >= minSimilarity) {
-
-                System.out.println(
-                        "[Vector Store] 검색 결과 추가: "
-                                + document.getTitle()
-                                + " / similarity = "
-                                + similarity
-                                + " / 기준 = "
-                                + minSimilarity
-                );
-                
-                results.add(new SearchResult(document, similarity));
-            }
-            else {
-
-                System.out.println(
-                        "[Vector Store] 검색 결과 제외: "
-                                + document.getTitle()
-                                + " / similarity = "
-                                + similarity
-                                + " / 기준 = "
-                                + minSimilarity
-                );
-            }
+        if (queryEmbedding == null
+                || queryEmbedding.length != EMBEDDING_DIMENSION) {
+            throw new IllegalArgumentException(
+                    "검색 임베딩은 "
+                            + EMBEDDING_DIMENSION
+                            + "차원이어야 합니다.");
         }
 
-        // 유사도가 높은순으로 정렬
-        results.sort(Comparator.comparingDouble(SearchResult::getSimilarity).reversed());
+        if (topk <= 0) {
+            return new ArrayList<>();
+        }
 
-        int resultCount = Math.min(topk, results.size());
+        String vector = toVectorString(queryEmbedding);
+
+        String sql = """
+                SELECT
+                    title,
+                    content,
+                    embedding::text AS embedding,
+                    1 - (embedding <=> ?::vector) AS similarity
+                FROM moviebot.movie_documents
+                WHERE 1 - (embedding <=> ?::vector) >= ?
+                ORDER BY embedding <=> ?::vector ASC
+                LIMIT ?
+                """;
+
+        List<SearchResult> results = jdbcTemplate.query(
+                sql,
+                (rs, rowNum) -> new SearchResult(
+                        mapDocument(rs, rowNum),
+                        rs.getDouble("similarity")),
+                vector,
+                vector,
+                minSimilarity,
+                vector,
+                topk);
 
         System.out.println(
-                "[Vector Store] 최종 검색 결과: "
-                        + resultCount
-                        + "개"
-        );
+                "[Vector Store] PostgreSQL 검색 결과: "
+                        + results.size()
+                        + "개 / 기준 유사도: "
+                        + minSimilarity);
 
-        return results.subList(0, resultCount);
+        for (SearchResult result : results) {
+            System.out.println(
+                    "[Vector Store] "
+                            + result.getDocument().getTitle()
+                            + " / similarity = "
+                            + result.getSimilarity());
+        }
+
+        return results;
     }
 }
