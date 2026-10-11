@@ -65,9 +65,7 @@ public class VectorStoreService {
     }
 
     // ResultSet을 MovieDocument로 변환
-    private MovieDocument mapDocument(ResultSet rs, int rowNum)
-            throws SQLException {
-
+    private MovieDocument mapDocument(ResultSet rs, int rowNum) throws SQLException {
         String title = rs.getString("title");
         String content = rs.getString("content");
         String vectorText = rs.getString("embedding");
@@ -80,6 +78,14 @@ public class VectorStoreService {
 
     // 영화 데이터 저장
     public void addDocument(MovieDocument document) {
+        // 1. 이미 같은 제목의 영화가 저장되어 있는지 확인
+        List<MovieDocument> existingDocuments = findByTitle(document.getTitle());
+
+        if (!existingDocuments.isEmpty()) {
+            System.out.println("[Vector Store] 중복 영화 저장 생략: " + document.getTitle());
+            return;
+        }
+
         String sql = """
                 INSERT INTO moviebot.movie_documents
                     (title, content, embedding)
@@ -94,12 +100,10 @@ public class VectorStoreService {
                 document.getContent(),
                 vector);
 
-        System.out.println(
-                "[Vector Store] PostgreSQL에 영화 저장: "
-                        + document.getTitle());
+        System.out.println("[Vector Store] PostgreSQL에 영화 저장: " + document.getTitle());
     }
 
-    // 저장된 모든 영화 조회
+    // 저장된 모든 영화 조회(할당 안됨)
     public List<MovieDocument> getDocuments() {
         String sql = """
                 SELECT title, content, embedding::text AS embedding
@@ -110,7 +114,7 @@ public class VectorStoreService {
         return jdbcTemplate.query(sql, this::mapDocument);
     }
 
-    // 저장된 영화 개수 조회
+    // 저장된 영화 개수 조회(할당 안됨)
     public int size() {
         String sql = "SELECT COUNT(*) FROM moviebot.movie_documents";
 
@@ -119,7 +123,7 @@ public class VectorStoreService {
         return count == null ? 0 : count;
     }
 
-    // 모든 영화 데이터 삭제
+    // 모든 영화 데이터 삭제(할당 안됨)
     public void clear() {
         jdbcTemplate.update("DELETE FROM moviebot.movie_documents");
 
@@ -145,15 +149,9 @@ public class VectorStoreService {
                 ORDER BY id
                 """;
 
-        results.addAll(
-                jdbcTemplate.query(sql, this::mapDocument, normalizedTitle));
+        results.addAll(jdbcTemplate.query(sql, this::mapDocument, normalizedTitle));
 
-        System.out.println(
-                "[Vector Store] 제목 검색: "
-                        + title
-                        + " / 결과: "
-                        + results.size()
-                        + "개");
+        System.out.println("[Vector Store] 제목 검색: " + title + " / 결과: " + results.size() + "개");
 
         return results;
     }
@@ -217,18 +215,10 @@ public class VectorStoreService {
                 vector,
                 topk);
 
-        System.out.println(
-                "[Vector Store] PostgreSQL 검색 결과: "
-                        + results.size()
-                        + "개 / 기준 유사도: "
-                        + minSimilarity);
+        System.out.println("[Vector Store] PostgreSQL 검색 결과: " + results.size() + "개 / 기준 유사도: " + minSimilarity);
 
         for (SearchResult result : results) {
-            System.out.println(
-                    "[Vector Store] "
-                            + result.getDocument().getTitle()
-                            + " / similarity = "
-                            + result.getSimilarity());
+            System.out.println("[Vector Store] " + result.getDocument().getTitle() + " / similarity = " + result.getSimilarity());
         }
 
         return results;

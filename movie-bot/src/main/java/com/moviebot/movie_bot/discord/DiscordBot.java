@@ -11,6 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 
 import com.moviebot.movie_bot.service.OllamaService;
 import com.moviebot.movie_bot.service.RagService;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+
 import com.moviebot.movie_bot.service.MovieService;
 
 @Component
@@ -18,15 +22,31 @@ public class DiscordBot extends ListenerAdapter {
     private final OllamaService ollamaService;  // 테스트용
     private final MovieService movieService;    // 테스트용
     private final RagService ragService;
+    private JDA jda;
+    private final String token;
 
     public DiscordBot(@Value("${discord.bot.token}") String token, OllamaService ollamaService, MovieService movieService, RagService ragService) throws Exception {
         this.ollamaService = ollamaService;
         this.movieService = movieService;
         this.ragService = ragService;
+        this.token = token;
+    }
 
-        JDABuilder.createDefault(token)
+    @PostConstruct 
+    public void startBot() {
+        this.jda = JDABuilder.createDefault(token)
                 .addEventListeners(this)
                 .build();
+        
+        System.out.println("[DiscordBot] JDA 시작====================================================");
+    }
+
+    @PreDestroy 
+    public void stopBot() {
+        if (this.jda != null) {
+            this.jda.shutdown();
+            System.out.println("[DiscordBot] JDA 종료====================================================");
+        }
     }
 
     @Override
